@@ -7,18 +7,22 @@
             <el-table :data="tableData">
               <el-table-column prop="goodsName" label="商品名称"></el-table-column>
               <el-table-column prop="count" label="数量"></el-table-column>
-              <el-table-column prop="price" label="价格"></el-table-column>
+              <el-table-column prop="price" label="单价"></el-table-column>
               <el-table-column fixed="right" label="操作">
-                <template>
-                  <el-button type="text" size="small">删除</el-button>
-                  <el-button type="text" size="small">增加</el-button>
+                <template slot-scope="scope">
+                  <el-button type="text" size="small" @click="delGoods(scope.row)">删除</el-button>
+                  <el-button type="text" size="small" @click="addGoods(scope.row)">增加</el-button>
                 </template>
               </el-table-column>
             </el-table>
+            <div class="stastic">
+              <span class="totalnum">数量：{{totalNum}}</span>
+              <span class="totalprice">总价：{{totalPrice}}元</span>
+            </div>
             <div class="tool-btn">
               <el-button type="warning" size="medium">挂单</el-button>
-              <el-button type="danger" size="medium">删除</el-button>
-              <el-button type="success" size="medium">结账</el-button>
+              <el-button type="danger" size="medium" @click="deleteAll">删除</el-button>
+              <el-button type="success" size="medium" @click="payBill">结账</el-button>
             </div>
           </el-tab-pane>
           <el-tab-pane label="挂单" name="list">挂单</el-tab-pane>
@@ -30,7 +34,7 @@
           <div class="title">常用商品</div>
           <div class="often-goods-list">
             <ul>
-              <li :key="item.id" v-for="item in oftenGoods">
+              <li :key="item.goodsId" v-for="item in oftenGoods" @click="addGoods(item)">
                 <span>{{item.goodsName}}</span>
                 <span class="o-price">￥{{item.price}}元</span>
               </li>
@@ -42,7 +46,7 @@
             <el-tab-pane label="汉堡">
               <div class="cookList">
                 <ul>
-                  <li :key="item.goodsId" v-for="item in type0Goods">
+                  <li :key="item.goodsId" v-for="item in type0Goods" @click="addGoods(item)">
                     <span class="foodImg">
                       <el-image
                         :src="item.goodsImg"
@@ -59,7 +63,7 @@
             <el-tab-pane label="小食">
               <div class="cookList">
                 <ul>
-                  <li :key="item.goodsId" v-for="item in type1Goods">
+                  <li :key="item.goodsId" v-for="item in type1Goods" @click="addGoods(item)">
                     <span class="foodImg">
                       <el-image
                         :src="item.goodsImg"
@@ -76,7 +80,7 @@
             <el-tab-pane label="饮料">
               <div class="cookList">
                 <ul>
-                  <li :key="item.goodsId" v-for="item in type2Goods">
+                  <li :key="item.goodsId" v-for="item in type2Goods" @click="addGoods(item)">
                     <span class="foodImg">
                       <el-image
                         :src="item.goodsImg"
@@ -93,7 +97,7 @@
             <el-tab-pane label="套餐">
               <div class="cookList">
                 <ul>
-                  <li :key="item.goodsId" v-for="item in type3Goods">
+                  <li :key="item.goodsId" v-for="item in type3Goods" @click="addGoods(item)">
                     <span class="foodImg">
                       <el-image
                         :src="item.goodsImg"
@@ -125,19 +129,19 @@ export default {
       type0Goods: [],
       type1Goods: [],
       type2Goods: [],
-      type3Goods: []
+      type3Goods: [],
+      totalNum: 0,
+      totalPrice: 0
     };
   },
   created() {
     axios
       .get(
-        "https://www.easy-mock.com/mock/5d5b6aea61bfb2319339c364/example/oftenGoods"
+        "https://www.easy-mock.com/mock/5b8b30dbf032f03c5e71de7f/kuaican/oftenGoods"
       )
       .then(res => {
         console.log(res);
-        if (res.data.success){
-          this.oftenGoods = res.data.result;
-        }
+        this.oftenGoods = res.data;
       })
       .catch(err => {
         alert("网络错误，不能访问");
@@ -147,6 +151,7 @@ export default {
         "https://www.easy-mock.com/mock/5b8b30dbf032f03c5e71de7f/kuaican/typeGoods"
       )
       .then(res => {
+        console.log(res.data[0]);
         this.type0Goods = res.data[0];
         this.type1Goods = res.data[1];
         this.type2Goods = res.data[2];
@@ -159,6 +164,64 @@ export default {
   mounted() {
     let orderHeight = document.body.clientHeight;
     document.getElementById("order_list").style.height = orderHeight + "px";
+  },
+  methods: {
+    addGoods(goods) {
+      let isExist = false;
+      //判断商品是否已经加入点餐列表中
+      for (let i = 0; i < this.tableData.length; i++) {
+        if (this.tableData[i].goodsId == goods.goodsId) {
+          isExist = true;
+          break;
+        }
+      }
+      if (isExist) {
+        let currentGoods = this.tableData.filter(item => {
+          return item.goodsId == goods.goodsId;
+        });
+        currentGoods[0].count++;
+      } else {
+        let newGoods = {
+          goodsId: goods.goodsId,
+          goodsName: goods.goodsName,
+          count: 1,
+          price: goods.price
+        };
+        this.tableData.push(newGoods);
+      }
+      this.computeTotal(this.tableData);
+    },
+    delGoods(goods) {
+      this.tableData = this.tableData.filter(
+        item => item.goodsId != goods.goodsId
+      );
+      this.computeTotal(this.tableData);
+    },
+    //计算商品数量和价格
+    computeTotal(tableData) {
+      let totalNum = 0,
+        totalPrice = 0;
+      this.tableData.forEach(item => {
+        totalNum += item.count;
+        totalPrice += item.count * item.price;
+      });
+      this.totalNum = totalNum;
+      this.totalPrice = totalPrice;
+    },
+    deleteAll() {
+      this.tableData = [];
+      this.totalNum = 0;
+      this.totalPrice = 0;
+    },
+    payBill(){
+      if (this.tableData.length){
+        this.deleteAll();
+        this.$message({
+          message: '结账成功',
+          type: 'success'
+        });
+      }
+    }
   }
 };
 </script>
@@ -168,6 +231,12 @@ export default {
   background-color: #f9fafc;
   border-right: solid 1px #c0ccda;
   height: 100%;
+  .stastic {
+    padding: 10px;
+    .totalprice {
+      margin-left: 40px;
+    }
+  }
   .tool-btn {
     margin-top: 20px;
   }
@@ -189,6 +258,7 @@ export default {
       padding: 10px;
       margin: 10px;
       background-color: #ffffff;
+      cursor: pointer;
       .o-price {
         color: #58b7ff;
       }
@@ -206,6 +276,7 @@ export default {
     padding: 2px;
     float: left;
     margin: 2px;
+    cursor: pointer;
     span {
       display: block;
       float: left;
